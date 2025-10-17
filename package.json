@@ -1,0 +1,49 @@
+{
+  "name": "@chittyos/chittycharge",
+  "version": "1.0.0",
+  "description": "Authorization Hold Service for ChittyOS - Part of ChittyPay Ecosystem",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "deploy:production": "wrangler deploy --env production",
+    "tail": "wrangler tail",
+    "test": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --ext .ts",
+    "lint:fix": "eslint . --ext .ts --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepare": "husky install"
+  },
+  "keywords": [
+    "chittyos",
+    "payments",
+    "stripe",
+    "authorization",
+    "holds",
+    "chittypay"
+  ],
+  "author": "ChittyOS",
+  "license": "UNLICENSED",
+  "private": true,
+  "dependencies": {
+    "stripe": "^17.7.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241127.0",
+    "@commitlint/cli": "^19.4.0",
+    "@commitlint/config-conventional": "^19.4.0",
+    "@typescript-eslint/eslint-plugin": "^8.9.0",
+    "@typescript-eslint/parser": "^8.9.0",
+    "@vitest/coverage-v8": "^3.2.4",
+    "eslint": "^9.9.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-simple-import-sort": "^12.0.0",
+    "husky": "^9.1.6",
+    "prettier": "^3.3.3",
+    "typescript": "^5.7.2",
+    "vitest": "^3.2.0",
+    "wrangler": "^3.99.0"
+  }
+}

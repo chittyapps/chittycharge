@@ -1,0 +1,10 @@
+node_modules
+dist
+coverage
+.wrangler
+.github
+*.log
+*.lock
+AUDIT-*.md
+AUDIT-*.json
+

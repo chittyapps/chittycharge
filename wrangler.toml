@@ -1,0 +1,36 @@
+#:schema node_modules/wrangler/config-schema.json
+name = "chittycharge"
+main = "src/index.ts"
+compatibility_date = "2025-10-11"
+workers_dev = true
+account_id = "0bc21e3a5a9de1a4cc843be9c3e98121"
+
+[[kv_namespaces]]
+binding = "HOLDS"
+id = "0664b7b3239940d9b4a01542c308c65c"
+preview_id = "2860437c6be9498fa9af80863168d4fe"
+
+# Staging environment
+[env.staging]
+name = "chittycharge-staging"
+workers_dev = true
+
+[[env.staging.kv_namespaces]]
+binding = "HOLDS"
+id = "0664b7b3239940d9b4a01542c308c65c" # Uses same KV as dev for staging
+
+# Production environment
+[env.production]
+name = "chittycharge-production"
+workers_dev = false
+
+[[env.production.kv_namespaces]]
+binding = "HOLDS"
+id = "a1685cca731f43c397db4e79b80ea075"
+
+[[routes]]
+pattern = "charge.chitty.cc/*"
+zone_name = "chitty.cc"
+
+[observability]
+enabled = true

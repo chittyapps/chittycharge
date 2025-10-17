@@ -1,0 +1,197 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+
+jobs:
+  lint-and-typecheck:
+    name: Lint and Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test -- --run
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          files: ./coverage/coverage-final.json
+          flags: unittests
+          name: codecov-umbrella
+
+  bullshit-detection:
+    name: Bullshit Detection Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Bullshit Detection - Documentation
+        run: |
+          echo "🔍 Running @agent-bullshit-detector on documentation..."
+          
+          # Check for vague claims in documentation
+          if grep -r "revolutionary\|game-changing\|best-in-class\|industry-leading\|enterprise-grade\|world-class" *.md --exclude-dir=node_modules; then
+            echo "⚠️  Detected marketing fluff in documentation"
+            echo "Consider replacing with specific, measurable claims"
+          fi
+          
+          # Check for unsupported performance claims
+          if grep -r "[0-9]\+x faster\|[0-9]\+% improvement" *.md --exclude-dir=node_modules | grep -v "benchmark\|test\|measured"; then
+            echo "⚠️  Performance claims without supporting evidence detected"
+            echo "Add benchmarks or test results to support claims"
+          fi
+          
+          # Check for unqualified "production-ready" claims
+          if grep -r "production-ready\|enterprise-ready" *.md --exclude-dir=node_modules; then
+            if [ ! -f "tests/e2e" ] || [ ! -f "tests/load" ]; then
+              echo "⚠️  'Production-ready' claim without E2E or load tests"
+            fi
+          fi
+          
+          echo "✅ Bullshit detection complete"
+
+      - name: Bullshit Detection - Code Comments
+        run: |
+          echo "🔍 Checking code comments for unsubstantiated claims..."
+          
+          # Check for TODO/FIXME without details
+          if grep -r "// TODO\|// FIXME" src/ --exclude-dir=node_modules | grep -v "TODO:.*https://\|FIXME:.*#[0-9]"; then
+            echo "⚠️  TODO/FIXME without issue link or details"
+            echo "Link to issues or provide actionable details"
+          fi
+          
+          # Check for "will be" future claims
+          if grep -r "will be\|will support\|coming soon" src/ --exclude-dir=node_modules --exclude-dir=dist; then
+            echo "⚠️  Future promises in code comments"
+            echo "Document actual current state, not future plans"
+          fi
+          
+          echo "✅ Code comment audit complete"
+
+      - name: Bullshit Detection - API Claims
+        run: |
+          echo "🔍 Auditing API documentation claims..."
+          
+          # Check for authentication claims
+          if grep -r "secure\|encrypted\|protected" *.md | grep -v "HTTPS\|TLS\|JWT\|Bearer"; then
+            echo "⚠️  Security claims without specific mechanism"
+          fi
+          
+          # Check for scalability claims
+          if grep -r "scalable\|scales" *.md | grep -v "load test\|benchmark\|capacity"; then
+            echo "⚠️  Scalability claims without evidence"
+          fi
+          
+          echo "✅ API documentation audit complete"
+
+      - name: Generate Bullshit Report
+        if: always()
+        run: |
+          cat > bullshit-report.md << 'REPORT'
+          # Bullshit Detection Report
+          
+          ## Summary
+          Automated detection of unsubstantiated claims, vague language, and marketing fluff.
+          
+          ## Findings
+          - Checked documentation for marketing buzzwords
+          - Audited performance claims for supporting evidence
+          - Validated code comments for actionable details
+          - Reviewed API documentation for specific implementation details
+          
+          ## Recommendations
+          1. Replace vague claims with specific, measurable statements
+          2. Support all performance claims with benchmarks
+          3. Link TODOs to GitHub issues
+          4. Document actual implementation, not future plans
+          REPORT
+          
+          cat bullshit-report.md
+
+      - name: Upload Bullshit Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bullshit-detection-report
+          path: bullshit-report.md
+
+  chittycheck:
+    name: ChittyCheck Compliance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run ChittyCheck
+        run: |
+          if [ -f "../../../chittycheck/chittycheck-enhanced.sh" ]; then
+            ../../../chittycheck/chittycheck-enhanced.sh
+          else
+            echo "⚠️  ChittyCheck not found - skipping compliance validation"
+            echo "Run locally: /chittycheck"
+          fi
+        continue-on-error: true
+
+  security:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run npm audit
+        run: npm audit --audit-level=moderate
+        continue-on-error: true
+
+      - name: Check for secrets
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD

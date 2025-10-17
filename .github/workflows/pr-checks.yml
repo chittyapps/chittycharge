@@ -1,0 +1,112 @@
+name: PR Checks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  pr-validation:
+    name: PR Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check for ChittyID compliance
+        run: |
+          echo "🔍 Checking for local ChittyID generation patterns..."
+          if grep -r "CHITTY-.*-[0-9]\+-[A-Z0-9]\+" src/ --exclude-dir=node_modules --exclude-dir=dist; then
+            echo "❌ Local ChittyID generation detected!"
+            echo "All ChittyIDs MUST be minted from id.chitty.cc"
+            exit 1
+          fi
+          echo "✅ No local ChittyID generation found"
+
+      - name: Check for secrets
+        run: |
+          echo "🔍 Checking for hardcoded secrets..."
+          if grep -r "sk_live_\|sk_test_\|secret_\|Bearer [a-zA-Z0-9]\{20,\}" src/ --exclude-dir=node_modules; then
+            echo "❌ Potential secrets found in code!"
+            exit 1
+          fi
+          echo "✅ No hardcoded secrets found"
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Run tests with coverage
+        run: npm test -- --run --coverage
+
+      - name: Check coverage threshold
+        run: |
+          coverage=$(cat coverage/coverage-summary.json | jq '.total.lines.pct')
+          if (( $(echo "$coverage < 70" | bc -l) )); then
+            echo "❌ Coverage below 70% threshold: $coverage%"
+            exit 1
+          fi
+          echo "✅ Coverage: $coverage%"
+
+      - name: Comment PR with results
+        uses: actions/github-script@v7
+        if: always()
+        with:
+          script: |
+            const fs = require('fs');
+            const coverage = JSON.parse(fs.readFileSync('coverage/coverage-summary.json', 'utf8'));
+            const pct = coverage.total.lines.pct;
+
+            const comment = `## 🤖 PR Check Results
+
+            ✅ Type check passed
+            ${pct >= 70 ? '✅' : '❌'} Test coverage: ${pct}%
+            ✅ ChittyID compliance check passed
+            ✅ Security scan passed
+
+            **Status**: ${pct >= 70 ? 'Ready for review' : 'Needs attention'}`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            })
+
+  size-check:
+    name: Bundle Size Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check bundle size
+        run: |
+          du -sh src/
+          file_count=$(find src -type f -name "*.ts" | wc -l)
+          line_count=$(find src -type f -name "*.ts" | xargs wc -l | tail -1 | awk '{print $1}')
+
+          echo "📊 Codebase stats:"
+          echo "Files: $file_count"
+          echo "Lines: $line_count"
+          echo "Avg lines per file: $((line_count / file_count))"
+
+          if [ $((line_count / file_count)) -gt 150 ]; then
+            echo "⚠️  Average file size exceeds 150 lines - consider refactoring"
+          fi

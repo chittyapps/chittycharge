@@ -1,0 +1,9 @@
+#!/bin/sh
+
+# Run formatting and lint checks before commit
+echo "Running format check..."
+npm run -s format:check || exit 1
+
+echo "Running ESLint..."
+npm run -s lint || exit 1
+

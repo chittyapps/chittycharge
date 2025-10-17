@@ -1,0 +1,19 @@
+# ChittyCharge Code Owners
+# These owners will be requested for review when someone opens a pull request.
+
+# Global owners for everything
+* @chittyos/platform-team
+
+# Service layer owners
+/src/services/ @chittyos/backend-team
+
+# Infrastructure and deployment
+/wrangler.toml @chittyos/devops-team
+/.github/workflows/ @chittyos/devops-team
+
+# Security-sensitive files
+/src/middleware/auth.ts @chittyos/security-team
+/src/services/stripe.service.ts @chittyos/finance-team
+
+# Documentation
+*.md @chittyos/docs-team

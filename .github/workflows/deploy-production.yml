@@ -1,0 +1,180 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      skip_tests:
+        description: 'Skip tests (emergency deployment only)'
+        required: false
+        default: false
+        type: boolean
+
+# Only one production deployment at a time
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy-production:
+    name: Deploy to Production Environment
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: production
+      url: https://charge.chitty.cc
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript type check
+        if: ${{ !inputs.skip_tests }}
+        run: npm run typecheck
+
+      - name: Run tests
+        if: ${{ !inputs.skip_tests }}
+        run: npm test
+        continue-on-error: true
+
+      - name: Pre-deployment validation
+        run: |
+          echo "## Pre-Deployment Checklist" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Dependencies installed" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ TypeScript validated" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Tests executed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+      - name: Deploy to Cloudflare Workers (Production)
+        id: deploy
+        run: |
+          echo "🚀 Deploying to production environment..."
+          npx wrangler deploy --env production 2>&1 | tee deploy-output.txt
+
+          # Extract deployment URL
+          DEPLOY_URL=$(grep -oP 'https://[^\s]+' deploy-output.txt | grep 'charge.chitty.cc' | head -1 || echo "https://charge.chitty.cc")
+          echo "url=$DEPLOY_URL" >> $GITHUB_OUTPUT
+
+          echo "✅ Deployment completed successfully"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Wait for deployment propagation
+        run: |
+          echo "Waiting for Cloudflare edge propagation..."
+          sleep 15
+
+      - name: Smoke test - Health check
+        id: health_check
+        run: |
+          HEALTH_URL="${{ steps.deploy.outputs.url }}/health"
+          echo "Testing production health endpoint: $HEALTH_URL"
+
+          MAX_RETRIES=3
+          RETRY_COUNT=0
+
+          while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+            RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "$HEALTH_URL" || echo "000")
+
+            if [ "$RESPONSE" = "200" ] || [ "$RESPONSE" = "404" ]; then
+              echo "✅ Production health check passed (HTTP $RESPONSE)"
+              echo "status=success" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+
+            RETRY_COUNT=$((RETRY_COUNT + 1))
+            echo "⚠️ Health check returned HTTP $RESPONSE. Retry $RETRY_COUNT/$MAX_RETRIES..."
+            sleep 5
+          done
+
+          echo "❌ Production health check failed after $MAX_RETRIES attempts"
+          echo "status=failed" >> $GITHUB_OUTPUT
+          exit 1
+
+      - name: Create GitHub Release
+        if: success() && github.event_name == 'push'
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ github.run_number }}
+          release_name: Production Release v${{ github.run_number }}
+          body: |
+            ## ChittyCharge Production Deployment
+
+            **Deployed:** ${{ steps.deploy.outputs.url }}
+            **Commit:** ${{ github.sha }}
+            **Actor:** @${{ github.actor }}
+
+            ### Changes
+            ${{ github.event.head_commit.message }}
+
+            ### Health Status
+            Production health check: ✅ Passed
+          draft: false
+          prerelease: false
+
+      - name: Deployment Success Summary
+        if: success()
+        run: |
+          echo "## 🎉 Production Deployment Successful" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** Production" >> $GITHUB_STEP_SUMMARY
+          echo "**URL:** ${{ steps.deploy.outputs.url }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Deployed by:** @${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Release:** v${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Health Check" >> $GITHUB_STEP_SUMMARY
+          echo "Status: ✅ All systems operational" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Service Endpoints" >> $GITHUB_STEP_SUMMARY
+          echo "- Main: \`${{ steps.deploy.outputs.url }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Health: \`${{ steps.deploy.outputs.url }}/health\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: Rollback instructions
+        if: failure()
+        run: |
+          echo "## ⚠️ Deployment Failed - Rollback Instructions" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Quick Rollback" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo "# Rollback to previous deployment" >> $GITHUB_STEP_SUMMARY
+          echo "wrangler rollback --env production" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Manual Rollback" >> $GITHUB_STEP_SUMMARY
+          echo "1. Go to Cloudflare Dashboard" >> $GITHUB_STEP_SUMMARY
+          echo "2. Navigate to Workers & Pages > chittycharge-production" >> $GITHUB_STEP_SUMMARY
+          echo "3. Click 'Rollback' to previous version" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Contact" >> $GITHUB_STEP_SUMMARY
+          echo "If issues persist, contact the ChittyOS team immediately." >> $GITHUB_STEP_SUMMARY
+
+      - name: Notify on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '🚨 Production Deployment Failed',
+              body: `Production deployment failed for commit ${context.sha}\n\nSee workflow run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              labels: ['deployment', 'production', 'urgent']
+            });

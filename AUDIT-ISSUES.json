@@ -1,0 +1,222 @@
+[
+  {
+    "id": 1,
+    "type": "fabricated_citation",
+    "severity": "critical",
+    "claim": "ChittyID Integration - Mint ChittyIDs for all holds",
+    "location": "README.md:46-49, src/index.ts:187,218",
+    "finding": "Code generates local pseudo-ChittyIDs using `CHITTY-AUTH-${paymentIntent.id.slice(-8).toUpperCase()}` instead of calling id.chitty.cc minting service. Violates ChittyOS ChittyID policy.",
+    "evidence": "No HTTP calls to CHITTY_ID_SERVICE found. ChittyCheck would flag this as prohibited local ID generation (1189+ patterns blocked).",
+    "suggested_fix": "Remove ChittyID claims from documentation OR implement actual minting via POST https://id.chitty.cc/v1/mint with Authorization: Bearer ${CHITTY_ID_TOKEN}",
+    "impact": "Architectural compliance violation; breaks ChittyOS identity management"
+  },
+  {
+    "id": 2,
+    "type": "unsupported_claim",
+    "severity": "high",
+    "claim": "Mercury Integration (Future ChittyPay) - Instant payouts to property owners",
+    "location": "README.md:56-61,324-344, chittypay.ts:229-269",
+    "finding": "Zero Mercury Bank integration exists. Placeholder functions throw 'not yet implemented' errors. Mercury API documentation doesn't show /callsign endpoint.",
+    "evidence": "Architecture diagram shows Mercury as peer to Stripe, implying current capability. Code functions only log and throw errors.",
+    "suggested_fix": "Move Mercury to 'Future Roadmap (Phase 2)' section. Remove from architecture diagram. Add disclaimer: 'Currently Stripe-only; Mercury integration planned'",
+    "impact": "Misleading users about current capabilities; may affect product decisions"
+  },
+  {
+    "id": 3,
+    "type": "statistical_error",
+    "severity": "high",
+    "claim": "The hold will automatically expire in 7 days if not captured",
+    "location": "README.md:407,411-414, src/index.ts:176-177,207-208, chittypay.ts:92-93,188-189",
+    "finding": "Stripe authorization holds expire based on card network rules: typically 5-7 days, but up to 31 days for some cards. Code hardcodes 7-day calculation without querying actual expiration from Stripe.",
+    "evidence": "Stripe docs: 'Authorization expiration timing depends on the card network and issuing bank, typically 5-7 days but can extend to 31 days for some Mastercard transactions.'",
+    "suggested_fix": "Change to 'typically 5-7 days depending on card network'. Remove hardcoded calculation or label as 'estimated'. Query Stripe for actual expiration if available.",
+    "impact": "Misleading users about actual fund release timing; may cause support issues"
+  },
+  {
+    "id": 4,
+    "type": "statistical_error",
+    "severity": "medium-high",
+    "claim": "Processing fee: 2.9% + $0.30",
+    "location": "README.md:205, src/index.ts:257-260, chittypay.ts:135,211-212",
+    "finding": "Stripe pricing varies by card type, payment method, 3D Secure usage, volume discounts, and currency. Code calculates fee locally instead of retrieving actual fee from Stripe Balance Transaction.",
+    "evidence": "Code: const processingFee = Math.round((amount * 0.029) + 30). Stripe provides actual fees via charge.balance_transaction.fee",
+    "suggested_fix": "Change to 'estimated processing fee: typically 2.9% + $0.30 (varies by card type)'. Retrieve actual fees from stripe.balanceTransactions.retrieve() for accuracy.",
+    "impact": "May cause financial reconciliation errors; inaccurate cost projections"
+  },
+  {
+    "id": 5,
+    "type": "unsupported_claim",
+    "severity": "medium-high",
+    "claim": "Authorization holds (NOT security deposits)",
+    "location": "README.md:18,23,399, stripe-holds.ts:4",
+    "finding": "Legal distinction between authorization holds and security deposits is jurisdiction-specific. Some states regulate 'security deposits' for rentals regardless of payment mechanism. No legal citation or jurisdiction specified.",
+    "evidence": "California Civil Code § 1950.5 may apply to authorization holds used for damage protection. NYC has strict security deposit regulations.",
+    "suggested_fix": "Add legal disclaimer: 'Consult legal counsel for your jurisdiction'. Specify which jurisdictions this terminology applies to. Link to relevant regulations.",
+    "impact": "Potential regulatory compliance issues; may not satisfy state disclosure laws"
+  },
+  {
+    "id": 6,
+    "type": "unsupported_claim",
+    "severity": "medium",
+    "claim": "Maximum: $100,000 USD (10000000 cents)",
+    "location": "README.md:148, src/index.ts:146-150, stripe-holds.ts:58-59",
+    "finding": "Stripe transaction limits vary by account verification level, payment method type, industry, and country. Default limit for new accounts is typically $2,000. No evidence of verified $100k limit.",
+    "evidence": "Stripe docs: 'Transaction limits depend on your account's risk assessment and verification status.'",
+    "suggested_fix": "Change to $5,000 default (environment variable configurable). Add note: 'Increase limit after Stripe account verification'",
+    "impact": "May cause failed transactions or false expectations for new accounts"
+  },
+  {
+    "id": 7,
+    "type": "missing_source",
+    "severity": "medium",
+    "claim": "Production: https://charge.chitty.cc",
+    "location": "README.md:114,232,290,360,455,462",
+    "finding": "No verification that domain is registered, DNS configured, SSL certificate exists, or Cloudflare Worker deployed to this route.",
+    "evidence": "Documentation references production endpoint without deployment verification.",
+    "suggested_fix": "Add deployment verification documentation or change to 'Planned: charge.chitty.cc'",
+    "impact": "Documentation may reference non-existent endpoint"
+  },
+  {
+    "id": 8,
+    "type": "logical_contradiction",
+    "severity": "medium",
+    "claim": "Idempotent capture operations",
+    "location": "README.md:54, src/index.ts:246-254",
+    "finding": "Idempotency key includes amount_to_capture, allowing multiple captures with different amounts. True idempotency should prevent ANY duplicate capture of same hold ID.",
+    "evidence": "Code: const idempotencyKey = `capture-${holdId}-${amount_to_capture || 'full'}`. Different amounts = different keys = multiple captures possible.",
+    "suggested_fix": "Remove amount_to_capture from idempotency key: `capture-${holdId}` to prevent all duplicate captures",
+    "impact": "Could allow double-charging in race conditions"
+  },
+  {
+    "id": 9,
+    "type": "exaggeration",
+    "severity": "medium",
+    "claim": "Instant Payouts: Transfer captured funds to property owner Mercury accounts",
+    "location": "README.md:329",
+    "finding": "Mercury Bank payouts are same-day or next-day, not instant. Stripe payouts to bank accounts: 2-7 business days standard, 1 day for Instant Payouts feature (costs 1%).",
+    "evidence": "Mercury documentation doesn't show instant/real-time transfers. Industry standard is ACH same-day at best.",
+    "suggested_fix": "Change to 'Fast Payouts (same-day or next-business-day)'",
+    "impact": "Sets incorrect user expectations about payout timing"
+  },
+  {
+    "id": 10,
+    "type": "missing_source",
+    "severity": "medium",
+    "claim": "Call Sign Payments: Mercury /callsign based recipient onboarding",
+    "location": "README.md:330",
+    "finding": "Mercury's public API documentation doesn't show /callsign endpoint. May be internal terminology or hypothetical feature.",
+    "evidence": "No public Mercury API documentation for /callsign endpoint found.",
+    "suggested_fix": "Add citation or change to 'Mercury account-based recipient onboarding'",
+    "impact": "Unverified API endpoint claim"
+  },
+  {
+    "id": 11,
+    "type": "missing_source",
+    "severity": "medium",
+    "claim": "Webhook handling automatically processes events",
+    "location": "README.md:270-295, src/index.ts:302-346",
+    "finding": "Webhook handler only logs events and returns 200. No event persistence, retry logic, idempotency checking, or notifications implemented.",
+    "evidence": "Code logs event and returns immediately. Webhook data is not actionable or stored.",
+    "suggested_fix": "Store webhook events in Durable Object or KV. Implement idempotency checks. Add status update notifications.",
+    "impact": "Webhook data is lost; no actionable status updates"
+  },
+  {
+    "id": 12,
+    "type": "unsupported_claim",
+    "severity": "low-medium",
+    "claim": "Authentication via ChittyID-Token header",
+    "location": "src/index.ts:68-74",
+    "finding": "Single shared secret for all API consumers. No rate limiting, IP allowlisting, token rotation, or audit logging.",
+    "evidence": "Code: if (chittyIdToken !== env.CHITTY_ID_TOKEN). Simple string comparison, no additional security layers.",
+    "suggested_fix": "Implement per-client API keys. Add rate limiting (10 req/min per token). Log failed auth attempts. Consider OAuth 2.0.",
+    "impact": "Vulnerable to token leakage and brute force attacks"
+  },
+  {
+    "id": 13,
+    "type": "unsupported_claim",
+    "severity": "low-medium",
+    "claim": "CORS headers allow cross-origin requests",
+    "location": "src/index.ts:37-40",
+    "finding": "Access-Control-Allow-Origin: '*' allows any website to call API from browser. Enables CSRF attacks if token stored in localStorage.",
+    "evidence": "CORS wildcard with no origin validation.",
+    "suggested_fix": "Whitelist specific origins: env.ALLOWED_ORIGINS.split(',') or remove CORS if backend-only API",
+    "impact": "Exposes API to any frontend; potential CSRF vulnerability"
+  },
+  {
+    "id": 14,
+    "type": "missing_source",
+    "severity": "low-medium",
+    "claim": "Always display to customers: [specific disclosure text]",
+    "location": "README.md:402-408",
+    "finding": "No citation of legal requirement. May not satisfy state-specific disclosure laws. Missing PCI, state consumer protection, and Truth in Lending Act disclosures.",
+    "evidence": "No legal citations provided for disclosure requirements.",
+    "suggested_fix": "Add legal review disclaimer. Cite specific regulations (CA Civil Code, 15 U.S.C. § 1692, PCI DSS).",
+    "impact": "May not satisfy legal disclosure requirements"
+  },
+  {
+    "id": 15,
+    "type": "unsupported_claim",
+    "severity": "low",
+    "claim": "Partial capture - capture only the amount needed",
+    "location": "README.md:11,186-208",
+    "finding": "Technically correct but doesn't explain that partial capture releases remaining authorization immediately and is one-time-only.",
+    "evidence": "Stripe partial capture releases remaining hold. Cannot capture remaining amount later.",
+    "suggested_fix": "Add note: 'Partial capture is final - remaining authorization is released immediately and cannot be captured later.'",
+    "impact": "Users may expect to capture remaining amount later"
+  },
+  {
+    "id": 16,
+    "type": "unsupported_claim",
+    "severity": "low",
+    "claim": "Credit card authorization holds",
+    "location": "Multiple references to 'card holds'",
+    "finding": "Stripe supports many payment methods (ACH, wallets, BNPL), not just cards. ACH doesn't support authorization holds. Code doesn't restrict to cards only.",
+    "evidence": "Frontend example uses Stripe card element but PaymentIntent API accepts any payment method.",
+    "suggested_fix": "Clarify 'credit/debit card only' or expand documentation for other payment methods with different handling",
+    "impact": "Confusion about supported payment methods"
+  },
+  {
+    "id": 17,
+    "type": "exaggeration",
+    "severity": "low",
+    "claim": "Production-ready service",
+    "location": "Implied by README.md deployment sections",
+    "finding": "Missing: monitoring/alerting, logging aggregation, performance benchmarks, load testing, security audit, PCI compliance verification, business continuity plan.",
+    "evidence": "No monitoring setup documented. No test coverage metrics. No security audit mentioned.",
+    "suggested_fix": "Add 'Beta' label until monitoring, logging, security audit, and testing complete",
+    "impact": "Service may not be ready for production loads or security requirements"
+  },
+  {
+    "id": 18,
+    "type": "missing_source",
+    "severity": "low",
+    "claim": "Frontend integration example with Stripe Elements",
+    "location": "README.md:226-268",
+    "finding": "Example missing: error handling, 3D Secure/SCA flow, loading states, network timeout handling, requires_action status handling.",
+    "evidence": "Code example shows happy path only.",
+    "suggested_fix": "Add complete example with error handling, 3DS flow, and loading states",
+    "impact": "Incomplete integration guidance for developers"
+  },
+  {
+    "id": 19,
+    "type": "missing_source",
+    "severity": "low",
+    "claim": "Error handling with user-friendly messages",
+    "location": "src/index.ts:101-107",
+    "finding": "Exposes raw error.message which may leak sensitive info. No error categorization, codes, or structured logging.",
+    "evidence": "Code: return Response.json({ error: error.message || 'Internal server error' })",
+    "suggested_fix": "Define error codes (INVALID_AMOUNT, STRIPE_API_ERROR). Sanitize error messages. Add structured logging.",
+    "impact": "May expose sensitive error details; difficult to handle errors on client"
+  },
+  {
+    "id": 20,
+    "type": "missing_source",
+    "severity": "low",
+    "claim": "Comprehensive testing",
+    "location": "Implied by documentation quality",
+    "finding": "No test files provided in audit scope. No test coverage metrics. No CI/CD pipeline mentioned.",
+    "evidence": "No tests/ directory or test files reviewed.",
+    "suggested_fix": "Add unit tests for validation logic, integration tests for Stripe API, webhook handler tests. Target 80%+ coverage.",
+    "impact": "Untested code may have bugs in production"
+  }
+]
