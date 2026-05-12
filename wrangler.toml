@@ -16,11 +16,22 @@ zone_name = "chitty.cc"
 
 [[tail_consumers]]
 service = "chittytrack"
-
-[observability]
-enabled = true
-
 [vars]
 ENVIRONMENT = "production"
 CHITTYCONNECT_URL = "https://connect.chitty.cc"
 CHITTYREGISTRY_URL = "https://registry.chitty.cc"
+
+[observability]
+enabled = true
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+invocation_logs = true
+destinations = ["chittytrack-logs"]
+
+[observability.traces]
+enabled = true
+head_sampling_rate = 1
+destinations = ["chittytrack-traces"]
+persist = false
