@@ -1,7 +1,7 @@
 #:schema node_modules/wrangler/config-schema.json
 name = "chittycharge"
 main = "src/index.ts"
-compatibility_date = "2025-10-11"
+compatibility_date = "2026-08-07"
 workers_dev = false
 account_id = "0bc21e3a5a9de1a4cc843be9c3e98121"
 
@@ -14,10 +14,22 @@ id = "a1685cca731f43c397db4e79b80ea075"
 pattern = "charge.chitty.cc/*"
 zone_name = "chitty.cc"
 
-[observability]
-enabled = true
-
 [vars]
 ENVIRONMENT = "production"
 CHITTYCONNECT_URL = "https://connect.chitty.cc"
 CHITTYREGISTRY_URL = "https://registry.chitty.cc"
+
+[observability]
+enabled = true
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+invocation_logs = true
+destinations = ["chittytrack-logs"]
+
+[observability.traces]
+enabled = true
+head_sampling_rate = 1
+destinations = ["chittytrack-traces"]
+persist = false
