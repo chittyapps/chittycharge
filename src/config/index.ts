@@ -6,10 +6,20 @@ import type { Env } from "../types";
 
 export * from "./constants";
 
+const REQUIRED_ENV_VARS: (keyof Env)[] = [
+  "STRIPE_SECRET_KEY",
+  "STRIPE_WEBHOOK_SECRET",
+  "CHITTY_ID_TOKEN",
+];
+
 export function validateEnv(env: Env): void {
-  // Only validate critical bindings - secrets checked when used
   if (!env.HOLDS) {
     throw new Error("Missing required binding: HOLDS (KV Namespace)");
+  }
+
+  const missing = REQUIRED_ENV_VARS.filter((key) => !env[key]);
+  if (missing.length > 0) {
+    throw new Error(`Missing required environment variables: ${missing.join(", ")}`);
   }
 }
 
