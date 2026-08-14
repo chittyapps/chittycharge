@@ -14,8 +14,6 @@ id = "a1685cca731f43c397db4e79b80ea075"
 pattern = "charge.chitty.cc/*"
 zone_name = "chitty.cc"
 
-[[tail_consumers]]
-service = "chittytrack"
 [vars]
 ENVIRONMENT = "production"
 CHITTYCONNECT_URL = "https://connect.chitty.cc"
